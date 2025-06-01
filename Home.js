@@ -33,11 +33,21 @@ const Home = () => {
   
   // Effect to handle UI state when images are closed
   useEffect(() => {
-    // If both images are null but selectedImage is not null, reset to initial state
-    if (!detectedFaceImage && !croppedImage && selectedImage) {
+    // Only reset to initial state if no images are shown AND we're not in the middle of detection
+    if (!detectedFaceImage && !croppedImage && selectedImage && !isDetecting && !isCropping) {
+      console.log('Resetting to initial state - clearing selectedImage');
       setSelectedImage(null);
     }
-  }, [detectedFaceImage, croppedImage, selectedImage]);
+  }, [detectedFaceImage, croppedImage, selectedImage, isDetecting, isCropping]);
+
+  // Add logging when any of the key state variables change
+  useEffect(() => {
+    console.log('State changed - selectedImage:', selectedImage ? 'set' : 'null');
+    console.log('State changed - detectedFaceImage:', detectedFaceImage ? 'set' : 'null');
+    console.log('State changed - croppedImage:', croppedImage ? 'set' : 'null');
+    console.log('State changed - isDetecting:', isDetecting);
+    console.log('State changed - isCropping:', isCropping);
+  }, [selectedImage, detectedFaceImage, croppedImage, isDetecting, isCropping]);
 
   // Load image history on component mount
   useEffect(() => {
@@ -127,26 +137,8 @@ const Home = () => {
           },
         );
         
-        // Also request storage permission
-        const storagePermission = parseInt(Platform.Version, 10) >= 33
-          ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
-          : PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE;
-          
-        const storageGranted = await PermissionsAndroid.request(storagePermission, {
-          title: 'Storage Permission',
-          message: 'App needs access to your storage to save photos',
-          buttonNeutral: 'Ask Me Later',
-          buttonNegative: 'Cancel',
-          buttonPositive: 'OK',
-        });
-        
         if (cameraGranted !== PermissionsAndroid.RESULTS.GRANTED) {
           Alert.alert('Permission Denied', 'Camera permission is required');
-          return;
-        }
-        
-        if (storageGranted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert('Permission Denied', 'Storage permission is required');
           return;
         }
       } catch (err) {
@@ -155,170 +147,84 @@ const Home = () => {
       }
     }
 
-    // Set loading state immediately
-    setIsDetecting(true);
+    // Simple camera options
+    const options = {
+      mediaType: 'photo',
+      includeBase64: false,
+      maxHeight: 2000,
+      maxWidth: 2000,
+      quality: 1,
+      saveToPhotos: false,
+    };
+
+    // Show user feedback
+    if (Platform.OS === 'android') {
+      ToastAndroid.show('Opening camera...', ToastAndroid.SHORT);
+    }
     
-    // Prepare a custom file path for the captured image
-    const timestamp = Date.now();
-    const customCaptureDir = `${RNFS.CachesDirectoryPath}/camera_captures`;
-    
-    try {
-      // Create directory if it doesn't exist
-      await RNFS.mkdir(customCaptureDir).catch(() => {});
-      
-      // Create a custom path for the image
-      const customImagePath = `${customCaptureDir}/capture_${timestamp}.jpg`;
-      
-      console.log('Launching camera with custom save path:', customImagePath);
-      
-      // Feedback to user
-      if (Platform.OS === 'android') {
-        ToastAndroid.show('Opening camera...', ToastAndroid.SHORT);
-      }
-      
-      // Custom options with the path
-      const options = {
-        mediaType: 'photo',
-        saveToPhotos: false,
-        includeBase64: true,
-        maxHeight: 2000,
-        maxWidth: 2000,
-        quality: 0.8,
-        includeExtra: true,
-        cameraType: 'back',
-      };
-      
-      // Launch camera with promise-based approach
-      new Promise(resolve => {
-        launchCamera(options, response => {
-          console.log('Camera response received:', JSON.stringify(response));
-          resolve(response);
-        });
-      }).then(async response => {
-        // Handle cancellation
+    // Launch camera with direct callback
+    launchCamera(options, async (response) => {
+      try {
+        console.log('Camera response received');
+        
         if (response.didCancel) {
           console.log('User cancelled camera');
-          setIsDetecting(false);
           return;
         }
         
-        // Handle errors
         if (response.errorCode) {
           console.error('Camera error:', response.errorMessage);
           Alert.alert('Camera Error', response.errorMessage);
-          setIsDetecting(false);
           return;
         }
         
-        // Validate response
-        if (!response.assets || !response.assets[0]) {
-          console.error('Invalid camera response - no assets');
+        if (!response.assets || !response.assets[0] || !response.assets[0].uri) {
+          console.error('Invalid camera response - no uri');
           Alert.alert('Error', 'Failed to capture image');
-          setIsDetecting(false);
           return;
         }
         
-        // Try to get image data - either URI or base64
-        const asset = response.assets[0];
+        // Get image path
+        const imagePath = response.assets[0].uri;
+        console.log('Image captured at:', imagePath);
         
-        if (!asset.uri && !asset.base64) {
-          console.error('No image data in response');
-          Alert.alert('Error', 'No image data received from camera');
-          setIsDetecting(false);
-          return;
-        }
+        // IMPORTANT: First set the selected image
+        setSelectedImage(imagePath);
         
-        // Create a file path that we control
-        let finalImagePath;
-        
-        // If we have base64 data, save it to our controlled location
-        if (asset.base64) {
-          console.log('Using base64 data to create image file');
-          
-          try {
-            await RNFS.writeFile(customImagePath, asset.base64, 'base64');
-            finalImagePath = `file://${customImagePath}`;
-            console.log('Created image file at:', finalImagePath);
-          } catch (error) {
-            console.error('Error saving base64 image:', error);
-            Alert.alert('Error', 'Failed to save captured image');
-            setIsDetecting(false);
-            return;
-          }
-        } 
-        // If no base64 but we have URI, try to copy the file
-        else if (asset.uri) {
-          const sourceUri = asset.uri.startsWith('file://') 
-            ? asset.uri.substring(7) 
-            : asset.uri;
-            
-          try {
-            console.log('Copying image from URI:', sourceUri);
-            console.log('To destination:', customImagePath);
-            
-            // Check if source exists
-            const sourceExists = await RNFS.exists(sourceUri);
-            if (!sourceExists) {
-              console.error('Source image does not exist:', sourceUri);
-              Alert.alert('Error', 'Source image file not found');
-              setIsDetecting(false);
-              return;
-            }
-            
-            // Copy the file
-            await RNFS.copyFile(sourceUri, customImagePath);
-            finalImagePath = `file://${customImagePath}`;
-            console.log('Copied image file to:', finalImagePath);
-          } catch (error) {
-            console.error('Error copying image file:', error);
-            Alert.alert('Error', 'Failed to process captured image');
-            setIsDetecting(false);
-            return;
-          }
-        }
-        
-        // Verify the final image path exists
-        const finalPathWithoutPrefix = finalImagePath.startsWith('file://') 
-          ? finalImagePath.substring(7) 
-          : finalImagePath;
-          
-        const imageExists = await RNFS.exists(finalPathWithoutPrefix);
-        
-        if (!imageExists) {
-          console.error('Final image file does not exist:', finalImagePath);
-          Alert.alert('Error', 'Failed to create image file');
-          setIsDetecting(false);
-          return;
-        }
-        
-        console.log('Image file confirmed to exist:', finalImagePath);
-        
-        // Update UI state with the image
-        setSelectedImage(finalImagePath);
+        // THEN set isDetecting - order matters!
+        setIsDetecting(true);
         setCroppedImage(null);
         
-        // Process the image with face detection
+        // Wait a second to ensure file is available
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         try {
-          console.log('Processing image with face detection:', finalImagePath);
-          
           // Call the native module
-          const result = await AutoCropModule.detectFace(finalImagePath);
+          console.log('----------}}}}{{{{}}}} Detecting face in:', imagePath);
+          const result = await AutoCropModule.detectFace(imagePath);
           console.log('Face detection result:', result);
           
-          if (result.success) {
-            setDetectedFaceImage(result.path);
+          if (result && result.success) {
+            // Make sure we update the UI with the detected face image
+            const detectedPath = result.path;
+            console.log('Setting detected face image to:', detectedPath);
             
-            if (result.message && result.message.includes("No face detected")) {
-              console.log('No face detected in image');
-              if (Platform.OS === 'android') {
-                ToastAndroid.show('No face detected. Using original image.', ToastAndroid.SHORT);
-              } else {
-                Alert.alert('No Face Detected', 'Using original image instead.');
+            // Force update with setTimeout to ensure UI updates
+            setTimeout(() => {
+              setDetectedFaceImage(detectedPath);
+              setIsDetecting(false);
+              
+              if (result.message && result.message.includes("No face detected")) {
+                if (Platform.OS === 'android') {
+                  ToastAndroid.show('No face detected. Using original image.', ToastAndroid.SHORT);
+                } else {
+                  Alert.alert('No Face Detected', 'Using original image instead.');
+                }
               }
-            }
+            }, 500);
           } else {
-            console.error('Face detection failed:', result.message);
-            setDetectedFaceImage(finalImagePath);
+            setDetectedFaceImage(imagePath);
+            setIsDetecting(false);
             
             if (Platform.OS === 'android') {
               ToastAndroid.show('Face detection failed. Using original image.', ToastAndroid.SHORT);
@@ -328,21 +234,22 @@ const Home = () => {
           }
         } catch (error) {
           console.error('Error in face detection:', error);
-          setDetectedFaceImage(finalImagePath);
-          Alert.alert('Processing Error', 'Failed to detect face in image');
-        } finally {
+          setDetectedFaceImage(imagePath);
           setIsDetecting(false);
+          
+          if (Platform.OS === 'android') {
+            ToastAndroid.show('Face detection failed. Using original image.', ToastAndroid.SHORT);
+          }
         }
-      }).catch(error => {
-        console.error('Error in camera capture process:', error);
-        Alert.alert('Error', 'Failed to process camera capture');
+      } catch (error) {
+        console.error('Error processing camera response:', error);
         setIsDetecting(false);
-      });
-    } catch (error) {
-      console.error('Error setting up camera capture:', error);
-      Alert.alert('Error', 'Failed to set up camera capture');
-      setIsDetecting(false);
-    }
+        
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('Failed to process image.', ToastAndroid.SHORT);
+        }
+      }
+    });
   };
 
   const handleGalleryPress = async () => {
@@ -375,168 +282,83 @@ const Home = () => {
       }
     }
 
-    // Set loading state immediately
-    setIsDetecting(true);
+    // Simple gallery options
+    const options = {
+      mediaType: 'photo',
+      includeBase64: false,
+      maxHeight: 2000,
+      maxWidth: 2000,
+      quality: 1,
+    };
+
+    // Show user feedback
+    if (Platform.OS === 'android') {
+      ToastAndroid.show('Opening gallery...', ToastAndroid.SHORT);
+    }
     
-    // Prepare a custom file path for the selected image
-    const timestamp = Date.now();
-    const customGalleryDir = `${RNFS.CachesDirectoryPath}/gallery_selections`;
-    
-    try {
-      // Create directory if it doesn't exist
-      await RNFS.mkdir(customGalleryDir).catch(() => {});
-      
-      // Create a custom path for the image
-      const customImagePath = `${customGalleryDir}/gallery_${timestamp}.jpg`;
-      
-      console.log('Launching gallery with custom save path:', customImagePath);
-      
-      // Feedback to user
-      if (Platform.OS === 'android') {
-        ToastAndroid.show('Opening gallery...', ToastAndroid.SHORT);
-      }
-      
-      // Launch image library with options
-      const options = {
-        mediaType: 'photo',
-        includeBase64: true,
-        maxHeight: 2000,
-        maxWidth: 2000,
-        quality: 0.8,
-        includeExtra: true,
-      };
-      
-      // Launch gallery with promise-based approach
-      new Promise(resolve => {
-        launchImageLibrary(options, response => {
-          console.log('Gallery response received:', JSON.stringify(response));
-          resolve(response);
-        });
-      }).then(async response => {
-        // Handle cancellation
+    // Launch gallery with direct callback
+    launchImageLibrary(options, async (response) => {
+      try {
+        console.log('Gallery response received');
+        
         if (response.didCancel) {
           console.log('User cancelled gallery selection');
-          setIsDetecting(false);
           return;
         }
         
-        // Handle errors
         if (response.errorCode) {
           console.error('Gallery error:', response.errorMessage);
           Alert.alert('Gallery Error', response.errorMessage);
-          setIsDetecting(false);
           return;
         }
         
-        // Validate response
-        if (!response.assets || !response.assets[0]) {
-          console.error('Invalid gallery response - no assets');
+        if (!response.assets || !response.assets[0] || !response.assets[0].uri) {
+          console.error('Invalid gallery response - no uri');
           Alert.alert('Error', 'Failed to select image');
-          setIsDetecting(false);
           return;
         }
         
-        // Try to get image data - either URI or base64
-        const asset = response.assets[0];
+        // Get image path
+        const imagePath = response.assets[0].uri;
+        console.log('Image selected at:', imagePath);
         
-        if (!asset.uri && !asset.base64) {
-          console.error('No image data in response');
-          Alert.alert('Error', 'No image data received from gallery');
-          setIsDetecting(false);
-          return;
-        }
+        // IMPORTANT: First set the selected image
+        setSelectedImage(imagePath);
         
-        // Create a file path that we control
-        let finalImagePath;
-        
-        // If we have base64 data, save it to our controlled location
-        if (asset.base64) {
-          console.log('Using base64 data to create image file');
-          
-          try {
-            await RNFS.writeFile(customImagePath, asset.base64, 'base64');
-            finalImagePath = `file://${customImagePath}`;
-            console.log('Created image file at:', finalImagePath);
-          } catch (error) {
-            console.error('Error saving base64 image:', error);
-            Alert.alert('Error', 'Failed to save selected image');
-            setIsDetecting(false);
-            return;
-          }
-        } 
-        // If no base64 but we have URI, try to copy the file
-        else if (asset.uri) {
-          const sourceUri = asset.uri.startsWith('file://') 
-            ? asset.uri.substring(7) 
-            : asset.uri;
-            
-          try {
-            console.log('Copying image from URI:', sourceUri);
-            console.log('To destination:', customImagePath);
-            
-            // Check if source exists
-            const sourceExists = await RNFS.exists(sourceUri);
-            if (!sourceExists) {
-              console.error('Source image does not exist:', sourceUri);
-              Alert.alert('Error', 'Source image file not found');
-              setIsDetecting(false);
-              return;
-            }
-            
-            // Copy the file
-            await RNFS.copyFile(sourceUri, customImagePath);
-            finalImagePath = `file://${customImagePath}`;
-            console.log('Copied image file to:', finalImagePath);
-          } catch (error) {
-            console.error('Error copying image file:', error);
-            Alert.alert('Error', 'Failed to process selected image');
-            setIsDetecting(false);
-            return;
-          }
-        }
-        
-        // Verify the final image path exists
-        const finalPathWithoutPrefix = finalImagePath.startsWith('file://') 
-          ? finalImagePath.substring(7) 
-          : finalImagePath;
-          
-        const imageExists = await RNFS.exists(finalPathWithoutPrefix);
-        
-        if (!imageExists) {
-          console.error('Final image file does not exist:', finalImagePath);
-          Alert.alert('Error', 'Failed to create image file');
-          setIsDetecting(false);
-          return;
-        }
-        
-        console.log('Image file confirmed to exist:', finalImagePath);
-        
-        // Update UI state with the image
-        setSelectedImage(finalImagePath);
+        // THEN set isDetecting - order matters!
+        setIsDetecting(true);
         setCroppedImage(null);
         
-        // Process the image with face detection
+        // Wait a second to ensure file is available
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         try {
-          console.log('Processing image with face detection:', finalImagePath);
-          
           // Call the native module
-          const result = await AutoCropModule.detectFace(finalImagePath);
+          console.log('----------}}}}{{{{}}}} Detecting face in:', imagePath);
+          const result = await AutoCropModule.detectFace(imagePath);
           console.log('Face detection result:', result);
           
-          if (result.success) {
-            setDetectedFaceImage(result.path);
+          if (result && result.success) {
+            // Make sure we update the UI with the detected face image
+            const detectedPath = result.path;
+            console.log('Setting detected face image to:', detectedPath);
             
-            if (result.message && result.message.includes("No face detected")) {
-              console.log('No face detected in image');
-              if (Platform.OS === 'android') {
-                ToastAndroid.show('No face detected. Using original image.', ToastAndroid.SHORT);
-              } else {
-                Alert.alert('No Face Detected', 'Using original image instead.');
+            // Force update with setTimeout to ensure UI updates
+            setTimeout(() => {
+              setDetectedFaceImage(detectedPath);
+              setIsDetecting(false);
+              
+              if (result.message && result.message.includes("No face detected")) {
+                if (Platform.OS === 'android') {
+                  ToastAndroid.show('No face detected. Using original image.', ToastAndroid.SHORT);
+                } else {
+                  Alert.alert('No Face Detected', 'Using original image instead.');
+                }
               }
-            }
+            }, 500);
           } else {
-            console.error('Face detection failed:', result.message);
-            setDetectedFaceImage(finalImagePath);
+            setDetectedFaceImage(imagePath);
+            setIsDetecting(false);
             
             if (Platform.OS === 'android') {
               ToastAndroid.show('Face detection failed. Using original image.', ToastAndroid.SHORT);
@@ -546,21 +368,22 @@ const Home = () => {
           }
         } catch (error) {
           console.error('Error in face detection:', error);
-          setDetectedFaceImage(finalImagePath);
-          Alert.alert('Processing Error', 'Failed to detect face in image');
-        } finally {
+          setDetectedFaceImage(imagePath);
           setIsDetecting(false);
+          
+          if (Platform.OS === 'android') {
+            ToastAndroid.show('Face detection failed. Using original image.', ToastAndroid.SHORT);
+          }
         }
-      }).catch(error => {
-        console.error('Error in gallery selection process:', error);
-        Alert.alert('Error', 'Failed to process gallery selection');
+      } catch (error) {
+        console.error('Error processing gallery response:', error);
         setIsDetecting(false);
-      });
-    } catch (error) {
-      console.error('Error setting up gallery selection:', error);
-      Alert.alert('Error', 'Failed to set up gallery selection');
-      setIsDetecting(false);
-    }
+        
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('Failed to process image.', ToastAndroid.SHORT);
+        }
+      }
+    });
   };
 
   const handleHistoryPress = () => {
@@ -583,29 +406,31 @@ const Home = () => {
       console.log('Crop result:', result);
       
       if (result && result.success) {
-        console.log('Face cropped successfully:', result);
-        setCroppedImage(result.path);
+        console.log('Face cropped successfully, path:', result.path);
         
-        // Show success message
-        if (Platform.OS === 'android') {
-          ToastAndroid.show('Image processed successfully!', ToastAndroid.SHORT);
-        }
+        // Force update with setTimeout to ensure UI updates
+        setTimeout(() => {
+          setCroppedImage(result.path);
+          setIsCropping(false);
+          
+          // Show success message
+          if (Platform.OS === 'android') {
+            ToastAndroid.show('Image processed successfully!', ToastAndroid.SHORT);
+          }
+        }, 500);
       } else {
         console.log('Failed to crop face:', result?.message || 'Unknown error');
+        setIsCropping(false);
         Alert.alert('Processing Error', result?.message || 'Failed to crop and process the face.');
       }
     } catch (error) {
       console.error('Error cropping face:', error);
-      Alert.alert('Cropping Error', `Failed to crop face: ${error.message}`);
-    } finally {
       setIsCropping(false);
+      Alert.alert('Cropping Error', `Failed to crop face: ${error.message}`);
     }
   };
 
   const handleHistoryItemPress = (item) => {
-    setSelectedImage(item.uri);
-    setDetectedFaceImage(item.uri);
-    setCroppedImage(null);
     setHistoryModalVisible(false);
   };
 
@@ -717,6 +542,7 @@ const Home = () => {
   };
 
   const clearDetectedImage = () => {
+    console.log('clearDetectedImage called');
     setDetectedFaceImage(null);
     setCroppedImage(null);
     // When both images are cleared, also clear the selected image to return to initial state
@@ -724,10 +550,41 @@ const Home = () => {
   };
 
   const clearCroppedImage = () => {
+    console.log('clearCroppedImage called');
     setCroppedImage(null);
     // If detected face is also null, clear selected image to return to initial state
     if (detectedFaceImage === null) {
+      console.log('detectedFaceImage is null, clearing selectedImage too');
       setSelectedImage(null);
+    }
+  };
+
+  // Test function to diagnose native module issues
+  const testNativeModule = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Testing native module...', ToastAndroid.SHORT);
+      }
+      
+      console.log('Testing AutoCropModule');
+      
+      // Test basic module functionality
+      const testResult = await AutoCropModule.testModule();
+      console.log('Basic test result:', testResult);
+      
+      // Test face detector
+      const detectorTest = await AutoCropModule.testFaceDetector();
+      console.log('Face detector test result:', detectorTest);
+      
+      // Show test results
+      Alert.alert(
+        'Native Module Test Results',
+        `Basic test: ${testResult}\n\nFace detector: ${detectorTest.success ? 'Working' : 'Failed'}\n${detectorTest.message}`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error testing native module:', error);
+      Alert.alert('Test Error', `Failed to test native module: ${error.message}`);
     }
   };
 
@@ -746,7 +603,7 @@ const Home = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        {!selectedImage ? (
+        {!selectedImage && !detectedFaceImage ? (
           // Initial state - 3 buttons centered vertically and horizontally
           <View style={styles.centeredButtonsContainer}>
             <TouchableOpacity style={styles.button} onPress={handleCameraPress}>
@@ -759,6 +616,13 @@ const Home = () => {
             
             <TouchableOpacity style={styles.button} onPress={handleHistoryPress}>
               <Text style={styles.buttonText}>Saved Images</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: '#9c27b0' }]} 
+              onPress={testNativeModule}
+            >
+              <Text style={styles.buttonText}>Test Module</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -830,12 +694,19 @@ const Home = () => {
                     source={{ uri: detectedFaceImage }} 
                     style={styles.cardImage}
                     resizeMode="contain"
+                    onLoad={() => console.log('Detected face image loaded successfully')}
+                    onError={(error) => console.error('Error loading detected face image:', error.nativeEvent.error)}
                   />
                 </View>
               ) : null}
               
               {/* Cropped Image Card */}
-              {croppedImage ? (
+              {isCropping ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#007bff" />
+                  <Text style={styles.loadingText}>Processing image...</Text>
+                </View>
+              ) : croppedImage ? (
                 <View style={styles.imageCard}>
                   <View style={styles.imageCardHeader}>
                     <TouchableOpacity 
@@ -861,6 +732,8 @@ const Home = () => {
                     source={{ uri: croppedImage }} 
                     style={styles.cardImage}
                     resizeMode="contain"
+                    onLoad={() => console.log('Cropped image loaded successfully')}
+                    onError={(error) => console.error('Error loading cropped image:', error.nativeEvent.error)}
                   />
                 </View>
               ) : null}
@@ -999,7 +872,7 @@ const styles = StyleSheet.create({
   },
   cardImage: {
     width: '100%',
-    height: 180,
+    height: 250,
     borderRadius: 8,
     backgroundColor: '#e0e0e0',
   },

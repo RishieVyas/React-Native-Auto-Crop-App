@@ -75,7 +75,15 @@ const moduleWithErrorHandling = {
   detectFace: async (imagePath) => {
     try {
       console.log('Calling detectFace with path:', imagePath);
-      const result = await module.detectFace(imagePath);
+      
+      // Ensure the path starts with 'file://'
+      let fixedPath = imagePath;
+      if (!fixedPath.startsWith('file://')) {
+        fixedPath = `file://${fixedPath}`;
+      }
+      
+      console.log('Using fixed path:', fixedPath);
+      const result = await module.detectFace(fixedPath);
       console.log('detectFace result:', result);
       return result;
     } catch (error) {
@@ -99,7 +107,15 @@ const moduleWithErrorHandling = {
   processImage: async (imagePath) => {
     try {
       console.log('Calling processImage with path:', imagePath);
-      const result = await module.processImage(imagePath);
+      
+      // Ensure the path starts with 'file://'
+      let fixedPath = imagePath;
+      if (!fixedPath.startsWith('file://')) {
+        fixedPath = `file://${fixedPath}`;
+      }
+      
+      console.log('Using fixed path:', fixedPath);
+      const result = await module.processImage(fixedPath);
       console.log('processImage result:', result);
       return result;
     } catch (error) {
@@ -111,7 +127,15 @@ const moduleWithErrorHandling = {
   scanFile: async (filePath) => {
     try {
       console.log('Calling scanFile with path:', filePath);
-      const result = await module.scanFile(filePath);
+      
+      // For scanFile, we need to remove the file:// prefix
+      let fixedPath = filePath;
+      if (fixedPath.startsWith('file://')) {
+        fixedPath = fixedPath.substring(7);
+      }
+      
+      console.log('Using fixed path for scanFile:', fixedPath);
+      const result = await module.scanFile(fixedPath);
       console.log('scanFile result:', result);
       return result;
     } catch (error) {
