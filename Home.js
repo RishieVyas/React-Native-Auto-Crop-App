@@ -68,7 +68,6 @@ const Home = () => {
       
       return true;
     } catch (error) {
-      console.error('Failed to create directories:', error);
       return false;
     }
   };
@@ -103,7 +102,6 @@ const Home = () => {
       
       setImageHistory(history);
     } catch (error) {
-      console.error('Failed to load image history:', error);
       setImageHistory([]);
     }
   };
@@ -128,7 +126,6 @@ const Home = () => {
           return;
         }
       } catch (err) {
-        console.error('Error requesting permissions:', err);
         return;
       }
     }
@@ -152,18 +149,15 @@ const Home = () => {
     launchCamera(options, async (response) => {
       try {
         if (response.didCancel) {
-          console.log('User cancelled camera');
           return;
         }
         
         if (response.errorCode) {
-          console.error('Camera error:', response.errorMessage);
           Alert.alert('Camera Error', response.errorMessage);
           return;
         }
         
         if (!response.assets || !response.assets[0] || !response.assets[0].uri) {
-          console.error('Invalid camera response - no uri');
           Alert.alert('Error', 'Failed to capture image');
           return;
         }
@@ -213,7 +207,6 @@ const Home = () => {
             }
           }
         } catch (error) {
-          console.error('Error in face detection:', error);
           setDetectedFaceImage(imagePath);
           setIsDetecting(false);
           
@@ -222,7 +215,6 @@ const Home = () => {
           }
         }
       } catch (error) {
-        console.error('Error processing camera response:', error);
         setIsDetecting(false);
         
         if (Platform.OS === 'android') {
@@ -257,7 +249,6 @@ const Home = () => {
           return;
         }
       } catch (err) {
-        console.error('Error requesting storage permission:', err);
         return;
       }
     }
@@ -280,18 +271,15 @@ const Home = () => {
     launchImageLibrary(options, async (response) => {
       try {
         if (response.didCancel) {
-          console.log('User cancelled gallery selection');
           return;
         }
         
         if (response.errorCode) {
-          console.error('Gallery error:', response.errorMessage);
           Alert.alert('Gallery Error', response.errorMessage);
           return;
         }
         
         if (!response.assets || !response.assets[0] || !response.assets[0].uri) {
-          console.error('Invalid gallery response - no uri');
           Alert.alert('Error', 'Failed to select image');
           return;
         }
@@ -341,7 +329,6 @@ const Home = () => {
             }
           }
         } catch (error) {
-          console.error('Error in face detection:', error);
           setDetectedFaceImage(imagePath);
           setIsDetecting(false);
           
@@ -350,7 +337,6 @@ const Home = () => {
           }
         }
       } catch (error) {
-        console.error('Error processing gallery response:', error);
         setIsDetecting(false);
         
         if (Platform.OS === 'android') {
@@ -389,18 +375,17 @@ const Home = () => {
           }
         }, 500);
       } else {
-        console.log('Failed to crop face:', result?.message || 'Unknown error');
         setIsCropping(false);
         Alert.alert('Processing Error', result?.message || 'Failed to crop and process the face.');
       }
     } catch (error) {
-      console.error('Error cropping face:', error);
       setIsCropping(false);
       Alert.alert('Cropping Error', `Failed to crop face: ${error.message}`);
     }
   };
 
   const handleHistoryItemPress = (item) => {
+    // Only close the modal, no other functionality
     setHistoryModalVisible(false);
   };
 
@@ -453,7 +438,6 @@ const Home = () => {
             return;
           }
         } catch (err) {
-          console.error('Error requesting permission:', err);
           Alert.alert('Permission Error', 'Failed to request storage permission');
           setIsSaving(false);
           return;
@@ -464,8 +448,6 @@ const Home = () => {
       const imagePath = croppedImage.startsWith('file://') 
         ? croppedImage.substring(7) 
         : croppedImage;
-      
-      console.log('Saving image from path:', imagePath);
       
       // Create a dedicated directory for saved images in the app's internal storage
       const savedFacesDir = `${RNFS.DocumentDirectoryPath}/SavedFaces`;
@@ -481,7 +463,6 @@ const Home = () => {
       
       // First save to internal storage (for history)
       await RNFS.copyFile(imagePath, internalDestPath);
-      console.log('Image saved to internal storage:', internalDestPath);
       
       // Also save to external storage (gallery) if on Android
       if (Platform.OS === 'android') {
@@ -489,11 +470,8 @@ const Home = () => {
         const externalDir = RNFS.PicturesDirectoryPath;
         const externalDestPath = `${externalDir}/AutoCrop_${timestamp}.jpg`;
         
-        console.log('Saving to external destination:', externalDestPath);
-        
         // Copy the file to external storage
         await RNFS.copyFile(imagePath, externalDestPath);
-        console.log('Image saved to gallery:', externalDestPath);
         
         // Make it visible in the gallery
         await AutoCropModule.scanFile(externalDestPath);
@@ -504,7 +482,6 @@ const Home = () => {
       
       Alert.alert('Success', 'Image saved successfully!');
     } catch (error) {
-      console.error('Error saving image:', error);
       Alert.alert('Save Error', `Failed to save image: ${error.message}`);
     } finally {
       setIsSaving(false);

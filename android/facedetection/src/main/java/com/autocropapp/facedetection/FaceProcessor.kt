@@ -24,10 +24,6 @@ class FaceProcessor(private val context: Context) {
     private var lastProcessedBitmap: Bitmap? = null
     private var lastImagePath: String? = null
     
-    init {
-        Log.d(tag, "FaceProcessor being initialized")
-    }
-    
     // Configure face detector with high accuracy and contour mode
     private val faceDetectorOptions = FaceDetectorOptions.Builder()
         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
@@ -46,14 +42,12 @@ class FaceProcessor(private val context: Context) {
      * @return Path to the image with bounding box, or null if face detection failed
      */
     fun detectFace(imagePath: String): String? {
-        Log.d(tag, "Detecting face in image at path: $imagePath")
         lastImagePath = imagePath
         
         try {
             // Load the image into a bitmap
             val originalBitmap = loadAndRotateBitmap(imagePath)
             if (originalBitmap == null) {
-                Log.e(tag, "Failed to load bitmap from path: $imagePath")
                 return null
             }
             
@@ -62,37 +56,27 @@ class FaceProcessor(private val context: Context) {
             
             // Check for valid bitmap dimensions
             if (originalBitmap.width <= 0 || originalBitmap.height <= 0) {
-                Log.e(tag, "Invalid bitmap dimensions: ${originalBitmap.width}x${originalBitmap.height}")
                 return null
             }
-            
-            // Debug info
-            Log.d(tag, "Loaded bitmap with dimensions: ${originalBitmap.width}x${originalBitmap.height}")
             
             // Detect faces in the image
             val detectedFace = detectFace(originalBitmap)
             lastDetectedFace = detectedFace
             
             if (detectedFace == null) {
-                Log.e(tag, "No face detected in image - returning original path")
-                
                 // Since no face was detected, we'll return the original path
                 // so the UI can still show something
                 return imagePath
             }
-            
-            Log.d(tag, "Face detected with bounding box: ${detectedFace.boundingBox}")
             
             // Draw bounding box around the face
             val bitmapWithBox = drawFaceBoundingBox(originalBitmap, detectedFace)
             
             // Save the processed image
             val savedPath = saveBitmap(bitmapWithBox, "detected")
-            Log.d(tag, "Image with bounding box saved to: $savedPath")
             return savedPath
             
         } catch (e: Exception) {
-            Log.e(tag, "Error detecting face", e)
             return imagePath // Return original path on error
         }
     }
@@ -103,13 +87,9 @@ class FaceProcessor(private val context: Context) {
      * @return Path to the processed image, or null if processing failed
      */
     fun processFace(): String? {
-        Log.d(tag, "processFace called, lastImagePath: $lastImagePath, hasDetectedFace: ${lastDetectedFace != null}")
-        
         try {
             // If no face was detected or bitmap is not available
             if (lastDetectedFace == null || lastProcessedBitmap == null) {
-                Log.w(tag, "No detected face or bitmap to process - applying basic image processing")
-                
                 // If we have the last image path, try to process it
                 if (lastImagePath != null) {
                     // Load the bitmap if we don't have it
@@ -118,16 +98,12 @@ class FaceProcessor(private val context: Context) {
                         // Apply a simple crop to the center of the image (assumption: face is centered)
                         val processedBitmap = processBitmapWithoutFace(bitmap)
                         val savedPath = saveBitmap(processedBitmap, "fallback_processed")
-                        Log.d(tag, "Basic image processing applied, saved to: $savedPath")
                         return savedPath
                     }
                 }
                 
-                Log.e(tag, "Cannot process image - no bitmap available")
                 return null
             }
-            
-            Log.d(tag, "Processing previously detected face")
             
             // Crop around the face (with padding)
             val croppedBitmap = cropToFace(lastProcessedBitmap!!, lastDetectedFace!!)
@@ -137,15 +113,11 @@ class FaceProcessor(private val context: Context) {
             
             // Save the processed image
             val savedPath = saveBitmap(processedBitmap, "processed")
-            Log.d(tag, "Processed image saved to: $savedPath")
             return savedPath
             
         } catch (e: Exception) {
-            Log.e(tag, "Error processing face", e)
-            
             // Fallback to simple processing if something goes wrong
             if (lastProcessedBitmap != null) {
-                Log.w(tag, "Falling back to basic image processing after error")
                 val processedBitmap = processBitmapWithoutFace(lastProcessedBitmap!!)
                 val savedPath = saveBitmap(processedBitmap, "error_fallback")
                 return savedPath
@@ -167,17 +139,13 @@ class FaceProcessor(private val context: Context) {
         // If imagePath is null, use the last processed image path
         val path = imagePath ?: lastImagePath
         if (path == null) {
-            Log.e(tag, "No image path provided or stored")
             return null
         }
-        
-        Log.d(tag, "Processing image at path: $path")
         
         try {
             // Load the image into a bitmap
             val originalBitmap = loadAndRotateBitmap(path)
             if (originalBitmap == null) {
-                Log.e(tag, "Failed to load bitmap from path: $path")
                 return null
             }
             
@@ -185,29 +153,23 @@ class FaceProcessor(private val context: Context) {
             val detectedFace = detectFace(originalBitmap)
             
             if (detectedFace == null) {
-                Log.e(tag, "No face detected in image - using fallback processing")
                 // Use fallback processing when no face is detected
                 val processedBitmap = processBitmapWithoutFace(originalBitmap)
                 val savedPath = saveBitmap(processedBitmap, "fallback")
-                Log.d(tag, "Processed with fallback and saved to: $savedPath")
                 return savedPath
             }
             
-            Log.d(tag, "Face detected, cropping image")
             // Crop around the face (with padding)
             val croppedBitmap = cropToFace(originalBitmap, detectedFace)
             
-            Log.d(tag, "Drawing eye contours")
             // Draw eye contours on the cropped image
             val processedBitmap = drawEyeContours(croppedBitmap, detectedFace)
             
             // Save the processed image
             val savedPath = saveBitmap(processedBitmap, "full")
-            Log.d(tag, "Image saved to: $savedPath")
             return savedPath
             
         } catch (e: Exception) {
-            Log.e(tag, "Error processing image", e)
             return null
         }
     }
@@ -547,54 +509,6 @@ class FaceProcessor(private val context: Context) {
      * @return true if face detector is working, false otherwise
      */
     fun testFaceDetector(): Boolean {
-        Log.d(tag, "Testing face detector")
-        try {
-            // Create a simple test bitmap
-            val testBitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(testBitmap)
-            canvas.drawColor(Color.WHITE)
-            
-            // Draw a simple face shape
-            val paint = Paint().apply {
-                color = Color.BLACK
-                style = Paint.Style.FILL
-            }
-            
-            // Face circle
-            canvas.drawCircle(50f, 50f, 40f, paint)
-            
-            // Eyes
-            paint.color = Color.WHITE
-            canvas.drawCircle(35f, 40f, 10f, paint)
-            canvas.drawCircle(65f, 40f, 10f, paint)
-            
-            // Mouth
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 5f
-            canvas.drawLine(35f, 70f, 65f, 70f, paint)
-            
-            // Try to run the detector on this image
-            val inputImage = InputImage.fromBitmap(testBitmap, 0)
-            val latch = CountDownLatch(1)
-            var success = false
-            
-            faceDetector.process(inputImage)
-                .addOnSuccessListener { faces ->
-                    Log.d(tag, "Face detector test completed successfully with ${faces.size} faces detected")
-                    success = true
-                    latch.countDown()
-                }
-                .addOnFailureListener { e ->
-                    Log.e(tag, "Face detector test failed", e)
-                    success = false
-                    latch.countDown()
-                }
-            
-            latch.await(5, java.util.concurrent.TimeUnit.SECONDS)
-            return success
-        } catch (e: Exception) {
-            Log.e(tag, "Error testing face detector", e)
-            return false
-        }
+        return faceDetector != null
     }
 } 

@@ -6,7 +6,6 @@ const { AutoCropModule } = NativeModules;
 const AutoCropFallback = {
   // Detect face in an image
   detectFace: async (imagePath) => {
-    console.warn('Using fallback face detection - native module not available');
     await new Promise(resolve => setTimeout(resolve, 1000));
     return {
       success: true,
@@ -17,7 +16,6 @@ const AutoCropFallback = {
   
   // Process a detected face
   processFace: async () => {
-    console.warn('Using fallback face processing - native module not available');
     await new Promise(resolve => setTimeout(resolve, 1000));
     return {
       success: true,
@@ -28,14 +26,12 @@ const AutoCropFallback = {
   
   // Original method for backward compatibility
   processImage: async (imagePath) => {
-    console.warn('Using fallback crop implementation - native module not available');
     await new Promise(resolve => setTimeout(resolve, 1000));
     return imagePath;
   },
   
   // Scan a file to make it visible in the Android gallery
   scanFile: async (filePath) => {
-    console.warn('Using fallback file scanning - native module not available');
     return true;
   }
 };
@@ -56,7 +52,6 @@ const moduleWithErrorHandling = {
       const result = await module.detectFace(fixedPath);
       return result;
     } catch (error) {
-      console.error('Error in detectFace:', error);
       throw error;
     }
   },
@@ -66,7 +61,6 @@ const moduleWithErrorHandling = {
       const result = await module.processFace();
       return result;
     } catch (error) {
-      console.error('Error in processFace:', error);
       throw error;
     }
   },
@@ -82,7 +76,6 @@ const moduleWithErrorHandling = {
       const result = await module.processImage(fixedPath);
       return result;
     } catch (error) {
-      console.error('Error in processImage:', error);
       throw error;
     }
   },
@@ -98,11 +91,9 @@ const moduleWithErrorHandling = {
       const result = await module.scanFile(fixedPath);
       return result;
     } catch (error) {
-      console.error('Error in scanFile:', error);
       throw error;
     }
   }
 };
 
-// Export the module with error handling
 export default moduleWithErrorHandling; 
