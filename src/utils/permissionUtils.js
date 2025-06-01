@@ -33,7 +33,6 @@ export const requestStorageReadPermission = async () => {
   if (Platform.OS !== 'android') return true;
 
   try {
-    // For Android 13+ use READ_MEDIA_IMAGES, for older versions use READ_EXTERNAL_STORAGE
     const permission = parseInt(Platform.Version, 10) >= 33
       ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
       : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
@@ -63,24 +62,50 @@ export const requestStorageWritePermission = async () => {
   if (Platform.OS !== 'android') return true;
 
   try {
-    // For Android 13+ use READ_MEDIA_IMAGES (since write is included), for older versions use WRITE_EXTERNAL_STORAGE
-    const permission = parseInt(Platform.Version, 10) >= 33
-      ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
-      : PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE;
+    const androidVersion = parseInt(Platform.Version, 10);
 
-    const granted = await PermissionsAndroid.request(
-      permission,
-      {
-        title: 'Storage Permission',
-        message: 'App needs access to your storage to save photos',
-        buttonNeutral: 'Ask Me Later',
-        buttonNegative: 'Cancel',
-        buttonPositive: 'OK',
-      },
-    );
+    if (androidVersion >= 33) {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+        {
+          title: 'Storage Permission',
+          message: 'App needs access to your photos to save images',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        },
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    }
+    else if (androidVersion >= 29) {
+      const readGranted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+        {
+          title: 'Storage Read Permission',
+          message: 'App needs access to your storage to read photos',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        },
+      );
 
-    return granted === PermissionsAndroid.RESULTS.GRANTED;
+      return readGranted === PermissionsAndroid.RESULTS.GRANTED;
+    }
+    else {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        {
+          title: 'Storage Write Permission',
+          message: 'App needs access to your storage to save photos',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        },
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    }
   } catch (err) {
+    console.error('Error requesting storage permission:', err);
     return false;
   }
 }; 

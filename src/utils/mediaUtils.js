@@ -119,23 +119,61 @@ export const selectImageFromGallery = async () => {
  * @param {string} imagePath - The image path to save
  * @returns {Promise<boolean>} Success status
  */
-
 export const saveToGallery = async (imagePath) => {
   try {
     const path = imagePath.startsWith('file://')
       ? imagePath.substring(7)
       : imagePath;
 
-    const externalDir = RNFS.PicturesDirectoryPath;
-    const timestamp = Date.now();
-    const externalDestPath = `${externalDir}/AutoCrop_${timestamp}.jpg`;
+    const androidVersion = Platform.OS === 'android' ? parseInt(Platform.Version, 10) : 0;
 
-    await RNFS.copyFile(path, externalDestPath);
+    if (Platform.OS === 'android' && androidVersion >= 29) {
+      try {
+        const appPicturesDir = `${RNFS.ExternalDirectoryPath}/Pictures`;
 
-    await AutoCropModule.scanFile(externalDestPath);
+        const dirExists = await RNFS.exists(appPicturesDir);
+        if (!dirExists) {
+          await RNFS.mkdir(appPicturesDir);
+        }
 
-    return true;
+        const timestamp = Date.now();
+        const appSpecificPath = `${appPicturesDir}/AutoCrop_${timestamp}.jpg`;
+
+        await RNFS.copyFile(path, appSpecificPath);
+
+        const sharedPicturesPath = `${RNFS.PicturesDirectoryPath}/AutoCrop_${timestamp}.jpg`;
+        await RNFS.copyFile(appSpecificPath, sharedPicturesPath);
+
+        await AutoCropModule.scanFile(sharedPicturesPath);
+
+        if (Platform.OS === 'android') {
+          ToastAndroid.show("Image saved to gallery", ToastAndroid.SHORT);
+        }
+
+        return true;
+      } catch (innerError) {
+        console.error("Error saving to gallery:", innerError);
+        if (Platform.OS === 'android') {
+          ToastAndroid.show("Failed to save to gallery", ToastAndroid.LONG);
+        }
+        return false;
+      }
+    }
+    else {
+      const timestamp = Date.now();
+      const externalDestPath = `${RNFS.PicturesDirectoryPath}/AutoCrop_${timestamp}.jpg`;
+
+      await RNFS.copyFile(path, externalDestPath);
+
+      if (Platform.OS === 'android') {
+        await AutoCropModule.scanFile(externalDestPath);
+        ToastAndroid.show("Image saved to gallery", ToastAndroid.SHORT);
+      }
+
+      return true;
+    }
   } catch (error) {
+    console.error("Error in saveToGallery:", error);
     return false;
   }
 }; 
