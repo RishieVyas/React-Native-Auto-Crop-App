@@ -9,17 +9,36 @@ import {
   FlatList,
   Dimensions,
   SafeAreaView,
+  ActivityIndicator,
+  ToastAndroid,
+  Platform,
+  Alert,
+  PermissionsAndroid,
 } from 'react-native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import RNFS from 'react-native-fs';
+import AutoCropModule from './NativeModules';
 
 const { width, height } = Dimensions.get('window');
 
 const Home = () => {
   const [selectedImage, setSelectedImage] = useState(null);
+  const [detectedFaceImage, setDetectedFaceImage] = useState(null);
+  const [croppedImage, setCroppedImage] = useState(null);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [imageHistory, setImageHistory] = useState([]);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [isCropping, setIsCropping] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
+  // Effect to handle UI state when images are closed
+  useEffect(() => {
+    // If both images are null but selectedImage is not null, reset to initial state
+    if (!detectedFaceImage && !croppedImage && selectedImage) {
+      setSelectedImage(null);
+    }
+  }, [detectedFaceImage, croppedImage, selectedImage]);
+
   // Load image history on component mount
   useEffect(() => {
     // Ensure directory exists and then load history
@@ -76,26 +95,85 @@ const Home = () => {
     }
   };
 
-  const handleCameraPress = () => {
-    const options = {
-      mediaType: 'photo',
-      includeBase64: false,
-      maxHeight: 2000,
-      maxWidth: 2000,
-    };
-
-    launchCamera(options, (response) => {
-      if (response.didCancel) {
-        console.log('User cancelled camera');
-      } else if (response.errorCode) {
-        console.log('Camera Error: ', response.errorMessage);
+  const handleImageSelected = async (response) => {
+    if (response.didCancel) {
+      console.log('User cancelled selection');
+      return;
+    } 
+    
+    if (response.errorCode) {
+      console.log('Image selection error:', response.errorMessage);
+      return;
+    }
+    
+    const imagePath = response.assets[0].uri;
+    setSelectedImage(imagePath);
+    setCroppedImage(null);
+    
+    // Automatically detect face after image selection
+    try {
+      setIsDetecting(true);
+      console.log('Detecting face in:', imagePath);
+      
+      // Call the native module to detect face
+      const result = await AutoCropModule.detectFace(imagePath);
+      
+      if (result.success) {
+        console.log('Detection successful:', result);
+        setDetectedFaceImage(result.path);
+        
+        // Show message if no face was detected
+        if (result.message && result.message.includes("No face detected")) {
+          console.log('No face detected:', result.message);
+          if (Platform.OS === 'android') {
+            ToastAndroid.show('No face detected. Using original image.', ToastAndroid.SHORT);
+          } else {
+            Alert.alert('No Face Detected', 'Using original image instead.');
+          }
+        }
       } else {
-        setSelectedImage(response.assets[0].uri);
+        console.log('Detection failed:', result.message);
+        setDetectedFaceImage(imagePath); // Use original image if detection failed
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('Face detection failed. Using original image.', ToastAndroid.SHORT);
+        } else {
+          Alert.alert('Detection Failed', 'Using original image instead.');
+        }
       }
-    });
+    } catch (error) {
+      console.error('Error detecting face:', error);
+      setDetectedFaceImage(imagePath); // Use original image on error
+      Alert.alert('Detection Error', `Failed to detect face: ${error.message}`);
+    } finally {
+      setIsDetecting(false);
+    }
   };
 
-  const handleGalleryPress = () => {
+  const handleCameraPress = async () => {
+    // Check camera permission on Android
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          {
+            title: 'Camera Permission',
+            message: 'App needs access to your camera to take photos',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          },
+        );
+        
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert('Permission Denied', 'Camera permission is required to take photos');
+          return;
+        }
+      } catch (err) {
+        console.error('Error requesting camera permission:', err);
+        return;
+      }
+    }
+
     const options = {
       mediaType: 'photo',
       includeBase64: false,
@@ -103,15 +181,47 @@ const Home = () => {
       maxWidth: 2000,
     };
 
-    launchImageLibrary(options, (response) => {
-      if (response.didCancel) {
-        console.log('User cancelled gallery');
-      } else if (response.errorCode) {
-        console.log('Gallery Error: ', response.errorMessage);
-      } else {
-        setSelectedImage(response.assets[0].uri);
+    launchCamera(options, handleImageSelected);
+  };
+
+  const handleGalleryPress = async () => {
+    // Check storage permission on Android
+    if (Platform.OS === 'android') {
+      try {
+        // For Android 13+ use READ_MEDIA_IMAGES, for older versions use READ_EXTERNAL_STORAGE
+        const permission = parseInt(Platform.Version, 10) >= 33
+          ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
+          : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
+          
+        const granted = await PermissionsAndroid.request(
+          permission,
+          {
+            title: 'Storage Permission',
+            message: 'App needs access to your storage to select photos',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          },
+        );
+        
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert('Permission Denied', 'Storage permission is required to select photos');
+          return;
+        }
+      } catch (err) {
+        console.error('Error requesting storage permission:', err);
+        return;
       }
-    });
+    }
+
+    const options = {
+      mediaType: 'photo',
+      includeBase64: false,
+      maxHeight: 2000,
+      maxWidth: 2000,
+    };
+
+    launchImageLibrary(options, handleImageSelected);
   };
 
   const handleHistoryPress = () => {
@@ -119,18 +229,153 @@ const Home = () => {
     setHistoryModalVisible(true);
   };
 
-  const handleCropPress = () => {
-    // This will be implemented later
-    console.log('Crop button pressed');
-  };
+  const handleCropPress = async () => {
+    if (!detectedFaceImage) {
+      Alert.alert('Error', 'No image to crop');
+      return;
+    }
 
-  const handleCloseImage = () => {
-    setSelectedImage(null);
+    try {
+      setIsCropping(true);
+      console.log('Cropping face from:', detectedFaceImage);
+      
+      // Call the native module to crop face and draw eye contours
+      const result = await AutoCropModule.processFace();
+      console.log('Crop result:', result);
+      
+      if (result && result.success) {
+        console.log('Face cropped successfully:', result);
+        setCroppedImage(result.path);
+        
+        // Show success message
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('Image processed successfully!', ToastAndroid.SHORT);
+        }
+      } else {
+        console.log('Failed to crop face:', result?.message || 'Unknown error');
+        Alert.alert('Processing Error', result?.message || 'Failed to crop and process the face.');
+      }
+    } catch (error) {
+      console.error('Error cropping face:', error);
+      Alert.alert('Cropping Error', `Failed to crop face: ${error.message}`);
+    } finally {
+      setIsCropping(false);
+    }
   };
 
   const handleHistoryItemPress = (item) => {
     setSelectedImage(item.uri);
+    setDetectedFaceImage(item.uri);
+    setCroppedImage(null);
     setHistoryModalVisible(false);
+  };
+
+  const handleSaveImage = async () => {
+    if (!croppedImage) {
+      Alert.alert('Error', 'No processed image to save');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      
+      // Check for storage permission on Android
+      if (Platform.OS === 'android') {
+        // For Android 13+ use WRITE_EXTERNAL_STORAGE, for older versions use WRITE_EXTERNAL_STORAGE
+        let storagePermissionGranted = false;
+        
+        try {
+          if (parseInt(Platform.Version, 10) >= 33) {
+            // For Android 13+
+            const granted = await PermissionsAndroid.request(
+              PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+              {
+                title: 'Storage Permission',
+                message: 'App needs access to your storage to save photos',
+                buttonNeutral: 'Ask Me Later',
+                buttonNegative: 'Cancel',
+                buttonPositive: 'OK',
+              },
+            );
+            storagePermissionGranted = granted === PermissionsAndroid.RESULTS.GRANTED;
+          } else {
+            // For Android 12 and below
+            const granted = await PermissionsAndroid.request(
+              PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+              {
+                title: 'Storage Permission',
+                message: 'App needs access to your storage to save photos',
+                buttonNeutral: 'Ask Me Later',
+                buttonNegative: 'Cancel',
+                buttonPositive: 'OK',
+              },
+            );
+            storagePermissionGranted = granted === PermissionsAndroid.RESULTS.GRANTED;
+          }
+          
+          if (!storagePermissionGranted) {
+            Alert.alert('Permission Denied', 'Cannot save image without storage permission');
+            setIsSaving(false);
+            return;
+          }
+        } catch (err) {
+          console.error('Error requesting permission:', err);
+          Alert.alert('Permission Error', 'Failed to request storage permission');
+          setIsSaving(false);
+          return;
+        }
+      }
+      
+      // Extract the actual path from the URI (remove file:// prefix)
+      const imagePath = croppedImage.startsWith('file://') 
+        ? croppedImage.substring(7) 
+        : croppedImage;
+      
+      console.log('Saving image from path:', imagePath);
+      
+      // Get the pictures directory path
+      const externalDir = Platform.OS === 'android' 
+        ? RNFS.PicturesDirectoryPath 
+        : RNFS.DocumentDirectoryPath;
+      
+      // Create a destination path
+      const fileName = `AutoCrop_${Date.now()}.jpg`;
+      const destPath = `${externalDir}/${fileName}`;
+      
+      console.log('Saving to destination:', destPath);
+      
+      // Copy the file to external storage
+      await RNFS.copyFile(imagePath, destPath);
+      console.log('Image saved to:', destPath);
+      
+      // Make it visible in the gallery (Android only)
+      if (Platform.OS === 'android') {
+        // Using native module to scan media
+        await AutoCropModule.scanFile(destPath);
+      }
+      
+      Alert.alert('Success', 'Image saved to gallery successfully!');
+    } catch (error) {
+      console.error('Error saving image:', error);
+      Alert.alert('Save Error', `Failed to save image: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const clearDetectedImage = () => {
+    setDetectedFaceImage(null);
+    setCroppedImage(null);
+    // When both images are cleared, also clear the selected image to return to initial state
+    setSelectedImage(null);
+  };
+
+  const clearCroppedImage = () => {
+    setCroppedImage(null);
+    // If detected face is also null, clear selected image to return to initial state
+    if (detectedFaceImage === null) {
+      setSelectedImage(null);
+    }
   };
 
   const renderHistoryItem = ({ item }) => (
@@ -147,7 +392,6 @@ const Home = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Main content */}
       <View style={styles.content}>
         {!selectedImage ? (
           // Initial state - 3 buttons centered vertically and horizontally
@@ -165,7 +409,7 @@ const Home = () => {
             </TouchableOpacity>
           </View>
         ) : (
-          // When image is selected - 2x2 grid buttons at top and image below
+          // When image is selected - show grid buttons and images
           <View style={styles.selectedImageContent}>
             {/* 2x2 Grid of buttons */}
             <View style={styles.gridContainer}>
@@ -194,31 +438,79 @@ const Home = () => {
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
-                  style={styles.gridButton} 
+                  style={[
+                    styles.gridButton, 
+                    (!detectedFaceImage || isDetecting || isCropping) && styles.disabledButton
+                  ]} 
                   onPress={handleCropPress}
+                  disabled={!detectedFaceImage || isDetecting || isCropping}
                 >
-                  <Text style={styles.buttonText}>Crop</Text>
+                  {isCropping ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.buttonText}>Crop</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
             
-            {/* Selected Image with close button */}
-            <View style={styles.imageContainer}>
-              <View style={styles.imageHeaderContainer}>
-                <Text style={styles.imageTitle}>Selected Image</Text>
-                <TouchableOpacity 
-                  style={styles.closeButton} 
-                  onPress={handleCloseImage}
-                >
-                  <Text style={styles.closeButtonX}>✕</Text>
-                </TouchableOpacity>
-              </View>
+            {/* Image Cards Container */}
+            <View style={styles.imagesContainer}>
+              {/* Detected Face Image Card */}
+              {isDetecting ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#007bff" />
+                  <Text style={styles.loadingText}>Detecting face...</Text>
+                </View>
+              ) : detectedFaceImage ? (
+                <View style={styles.imageCard}>
+                  <View style={styles.imageCardHeader}>
+                    <Text style={styles.imageCardTitle}>Detected Face</Text>
+                    <TouchableOpacity 
+                      style={styles.closeButton} 
+                      onPress={clearDetectedImage}
+                    >
+                      <Text style={styles.closeButtonX}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Image 
+                    source={{ uri: detectedFaceImage }} 
+                    style={styles.cardImage}
+                    resizeMode="contain"
+                  />
+                </View>
+              ) : null}
               
-              <Image 
-                source={{ uri: selectedImage }} 
-                style={styles.selectedImage}
-                resizeMode="contain"
-              />
+              {/* Cropped Image Card */}
+              {croppedImage ? (
+                <View style={styles.imageCard}>
+                  <View style={styles.imageCardHeader}>
+                    <TouchableOpacity 
+                      style={[styles.saveButton, isSaving && styles.disabledButton]} 
+                      onPress={handleSaveImage}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.saveButtonText}>Save</Text>
+                      )}
+                    </TouchableOpacity>
+                    <Text style={styles.imageCardTitle}>Processed Image</Text>
+                    <TouchableOpacity 
+                      style={styles.closeButton} 
+                      onPress={clearCroppedImage}
+                    >
+                      <Text style={styles.closeButtonX}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Image 
+                    source={{ uri: croppedImage }} 
+                    style={styles.cardImage}
+                    resizeMode="contain"
+                  />
+                </View>
+              ) : null}
             </View>
           </View>
         )}
@@ -302,26 +594,61 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     width: '48%', // Just under half to ensure spacing
     alignItems: 'center',
+    justifyContent: 'center',
+    height: 45,
+  },
+  disabledButton: {
+    backgroundColor: '#cccccc',
   },
   buttonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
-  imageContainer: {
+  imagesContainer: {
     flex: 1,
-    marginTop: 8,
+    justifyContent: 'flex-start',
+    gap: 12,
   },
-  imageHeaderContainer: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#007bff',
+  },
+  imageCard: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    marginBottom: 12,
+  },
+  imageCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  imageTitle: {
-    fontSize: 18,
+  imageCardTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
+    flex: 1,
+    textAlign: 'center',
+  },
+  cardImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 8,
+    backgroundColor: '#e0e0e0',
   },
   closeButton: {
     width: 30,
@@ -336,11 +663,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  selectedImage: {
-    flex: 1,
-    width: '100%',
-    borderRadius: 8,
-    backgroundColor: '#e0e0e0',
+  saveButton: {
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    backgroundColor: '#4caf50',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   modalContainer: {
     flex: 1,
