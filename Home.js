@@ -35,19 +35,9 @@ const Home = () => {
   useEffect(() => {
     // Only reset to initial state if no images are shown AND we're not in the middle of detection
     if (!detectedFaceImage && !croppedImage && selectedImage && !isDetecting && !isCropping) {
-      console.log('Resetting to initial state - clearing selectedImage');
       setSelectedImage(null);
     }
   }, [detectedFaceImage, croppedImage, selectedImage, isDetecting, isCropping]);
-
-  // Add logging when any of the key state variables change
-  useEffect(() => {
-    console.log('State changed - selectedImage:', selectedImage ? 'set' : 'null');
-    console.log('State changed - detectedFaceImage:', detectedFaceImage ? 'set' : 'null');
-    console.log('State changed - croppedImage:', croppedImage ? 'set' : 'null');
-    console.log('State changed - isDetecting:', isDetecting);
-    console.log('State changed - isCropping:', isCropping);
-  }, [selectedImage, detectedFaceImage, croppedImage, isDetecting, isCropping]);
 
   // Load image history on component mount
   useEffect(() => {
@@ -65,7 +55,6 @@ const Home = () => {
       const processedDirExists = await RNFS.exists(processedFacesDir);
       
       if (!processedDirExists) {
-        console.log('Creating ProcessedFaces directory');
         await RNFS.mkdir(processedFacesDir);
       }
       
@@ -74,7 +63,6 @@ const Home = () => {
       const savedDirExists = await RNFS.exists(savedFacesDir);
       
       if (!savedDirExists) {
-        console.log('Creating SavedFaces directory');
         await RNFS.mkdir(savedFacesDir);
       }
       
@@ -93,7 +81,6 @@ const Home = () => {
       // Check if the directory exists
       const dirExists = await RNFS.exists(savedFacesDir);
       if (!dirExists) {
-        console.log('SavedFaces directory does not exist yet');
         setImageHistory([]);
         return;
       }
@@ -115,7 +102,6 @@ const Home = () => {
         }));
       
       setImageHistory(history);
-      console.log(`Loaded ${history.length} saved images`);
     } catch (error) {
       console.error('Failed to load image history:', error);
       setImageHistory([]);
@@ -165,8 +151,6 @@ const Home = () => {
     // Launch camera with direct callback
     launchCamera(options, async (response) => {
       try {
-        console.log('Camera response received');
-        
         if (response.didCancel) {
           console.log('User cancelled camera');
           return;
@@ -186,7 +170,6 @@ const Home = () => {
         
         // Get image path
         const imagePath = response.assets[0].uri;
-        console.log('Image captured at:', imagePath);
         
         // IMPORTANT: First set the selected image
         setSelectedImage(imagePath);
@@ -200,14 +183,11 @@ const Home = () => {
         
         try {
           // Call the native module
-          console.log('----------}}}}{{{{}}}} Detecting face in:', imagePath);
           const result = await AutoCropModule.detectFace(imagePath);
-          console.log('Face detection result:', result);
           
           if (result && result.success) {
             // Make sure we update the UI with the detected face image
             const detectedPath = result.path;
-            console.log('Setting detected face image to:', detectedPath);
             
             // Force update with setTimeout to ensure UI updates
             setTimeout(() => {
@@ -299,8 +279,6 @@ const Home = () => {
     // Launch gallery with direct callback
     launchImageLibrary(options, async (response) => {
       try {
-        console.log('Gallery response received');
-        
         if (response.didCancel) {
           console.log('User cancelled gallery selection');
           return;
@@ -320,7 +298,6 @@ const Home = () => {
         
         // Get image path
         const imagePath = response.assets[0].uri;
-        console.log('Image selected at:', imagePath);
         
         // IMPORTANT: First set the selected image
         setSelectedImage(imagePath);
@@ -334,14 +311,11 @@ const Home = () => {
         
         try {
           // Call the native module
-          console.log('----------}}}}{{{{}}}} Detecting face in:', imagePath);
           const result = await AutoCropModule.detectFace(imagePath);
-          console.log('Face detection result:', result);
           
           if (result && result.success) {
             // Make sure we update the UI with the detected face image
             const detectedPath = result.path;
-            console.log('Setting detected face image to:', detectedPath);
             
             // Force update with setTimeout to ensure UI updates
             setTimeout(() => {
@@ -399,15 +373,11 @@ const Home = () => {
 
     try {
       setIsCropping(true);
-      console.log('Cropping face from:', detectedFaceImage);
       
       // Call the native module to crop face and draw eye contours
       const result = await AutoCropModule.processFace();
-      console.log('Crop result:', result);
       
       if (result && result.success) {
-        console.log('Face cropped successfully, path:', result.path);
-        
         // Force update with setTimeout to ensure UI updates
         setTimeout(() => {
           setCroppedImage(result.path);
@@ -542,7 +512,6 @@ const Home = () => {
   };
 
   const clearDetectedImage = () => {
-    console.log('clearDetectedImage called');
     setDetectedFaceImage(null);
     setCroppedImage(null);
     // When both images are cleared, also clear the selected image to return to initial state
@@ -550,41 +519,10 @@ const Home = () => {
   };
 
   const clearCroppedImage = () => {
-    console.log('clearCroppedImage called');
     setCroppedImage(null);
     // If detected face is also null, clear selected image to return to initial state
     if (detectedFaceImage === null) {
-      console.log('detectedFaceImage is null, clearing selectedImage too');
       setSelectedImage(null);
-    }
-  };
-
-  // Test function to diagnose native module issues
-  const testNativeModule = async () => {
-    try {
-      if (Platform.OS === 'android') {
-        ToastAndroid.show('Testing native module...', ToastAndroid.SHORT);
-      }
-      
-      console.log('Testing AutoCropModule');
-      
-      // Test basic module functionality
-      const testResult = await AutoCropModule.testModule();
-      console.log('Basic test result:', testResult);
-      
-      // Test face detector
-      const detectorTest = await AutoCropModule.testFaceDetector();
-      console.log('Face detector test result:', detectorTest);
-      
-      // Show test results
-      Alert.alert(
-        'Native Module Test Results',
-        `Basic test: ${testResult}\n\nFace detector: ${detectorTest.success ? 'Working' : 'Failed'}\n${detectorTest.message}`,
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      console.error('Error testing native module:', error);
-      Alert.alert('Test Error', `Failed to test native module: ${error.message}`);
     }
   };
 
@@ -616,13 +554,6 @@ const Home = () => {
             
             <TouchableOpacity style={styles.button} onPress={handleHistoryPress}>
               <Text style={styles.buttonText}>Saved Images</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.button, { backgroundColor: '#9c27b0' }]} 
-              onPress={testNativeModule}
-            >
-              <Text style={styles.buttonText}>Test Module</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -694,8 +625,6 @@ const Home = () => {
                     source={{ uri: detectedFaceImage }} 
                     style={styles.cardImage}
                     resizeMode="contain"
-                    onLoad={() => console.log('Detected face image loaded successfully')}
-                    onError={(error) => console.error('Error loading detected face image:', error.nativeEvent.error)}
                   />
                 </View>
               ) : null}
@@ -732,8 +661,6 @@ const Home = () => {
                     source={{ uri: croppedImage }} 
                     style={styles.cardImage}
                     resizeMode="contain"
-                    onLoad={() => console.log('Cropped image loaded successfully')}
-                    onError={(error) => console.error('Error loading cropped image:', error.nativeEvent.error)}
                   />
                 </View>
               ) : null}
