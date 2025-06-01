@@ -15,11 +15,12 @@ import com.facebook.react.bridge.Arguments;
 import com.facebook.react.module.annotations.ReactModule;
 
 @ReactModule(name = AutoCropModule.NAME)
+@SuppressWarnings("unused") // Methods are used through React Native bridge
 public class AutoCropModule extends ReactContextBaseJavaModule {
     public static final String NAME = "AutoCropModule";
     
     private FaceProcessor faceProcessor;
-    private ReactApplicationContext mReactContext;
+    private final ReactApplicationContext mReactContext;
 
     public AutoCropModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -45,24 +46,18 @@ public class AutoCropModule extends ReactContextBaseJavaModule {
                 return;
             }
             
-            // Fix the file URI format if needed
             String fixedUri = imageUri;
             if (imageUri.startsWith("file://")) {
-                fixedUri = imageUri.substring(7); // Remove the "file://" prefix
+                fixedUri = imageUri.substring(7);
             }
             
-            // Detect faces in the image and draw bounding box
             String processedImagePath = faceProcessor.detectFace(fixedUri);
             
             if (processedImagePath != null) {
-                // Check if the returned path is the same as the input path
-                // This indicates no face was detected
                 boolean faceDetected = !processedImagePath.equals(fixedUri) && !processedImagePath.equals(imageUri);
                 
-                // Create a response with additional info
                 WritableMap response = Arguments.createMap();
                 
-                // For file paths, make sure they have the file:// prefix for React Native
                 if (!processedImagePath.startsWith("file://")) {
                     processedImagePath = "file://" + processedImagePath;
                 }
@@ -77,11 +72,10 @@ public class AutoCropModule extends ReactContextBaseJavaModule {
                 
                 promise.resolve(response);
             } else {
-                // Create an error response
                 WritableMap response = Arguments.createMap();
                 response.putBoolean("success", false);
                 response.putString("message", "Failed to detect face in the image");
-                response.putString("path", imageUri); // Return original image path
+                response.putString("path", imageUri);
                 
                 promise.resolve(response);
             }
@@ -98,14 +92,11 @@ public class AutoCropModule extends ReactContextBaseJavaModule {
                 return;
             }
             
-            // Process the previously detected face
             String processedImagePath = faceProcessor.processFace();
             
             if (processedImagePath != null) {
-                // Create a response with the path
                 WritableMap response = Arguments.createMap();
                 
-                // For file paths, make sure they have the file:// prefix for React Native
                 if (!processedImagePath.startsWith("file://")) {
                     processedImagePath = "file://" + processedImagePath;
                 }
@@ -115,7 +106,6 @@ public class AutoCropModule extends ReactContextBaseJavaModule {
                 
                 promise.resolve(response);
             } else {
-                // Create an error response
                 WritableMap response = Arguments.createMap();
                 response.putBoolean("success", false);
                 response.putString("message", "Failed to process the face");
@@ -135,7 +125,6 @@ public class AutoCropModule extends ReactContextBaseJavaModule {
                 return;
             }
             
-            // Process the image using our FaceProcessor
             String processedImagePath = faceProcessor.processImage(imageUri);
             
             if (processedImagePath != null) {
@@ -148,9 +137,6 @@ public class AutoCropModule extends ReactContextBaseJavaModule {
         }
     }
     
-    /**
-     * Scan a file to make it visible in the Android gallery
-     */
     @ReactMethod
     public void scanFile(String filePath, Promise promise) {
         try {
@@ -166,40 +152,6 @@ public class AutoCropModule extends ReactContextBaseJavaModule {
             });
         } catch (Exception e) {
             promise.reject("SCAN_ERROR", "Failed to scan file: " + e.getMessage(), e);
-        }
-    }
-    
-    // Simple test method to verify the module is accessible from JS
-    @ReactMethod
-    public void testModule(Promise promise) {
-        promise.resolve("AutoCropModule is working!");
-    }
-    
-    // Test method to verify the face detector is properly initialized
-    @ReactMethod
-    public void testFaceDetector(Promise promise) {
-        try {
-            if (faceProcessor == null) {
-                promise.reject("MODULE_ERROR", "FaceProcessor is not initialized");
-                return;
-            }
-            
-            // Check if face detector is available
-            boolean isDetectorAvailable = faceProcessor.testFaceDetector();
-            
-            if (isDetectorAvailable) {
-                WritableMap response = Arguments.createMap();
-                response.putBoolean("success", true);
-                response.putString("message", "Face detector is working properly");
-                promise.resolve(response);
-            } else {
-                WritableMap response = Arguments.createMap();
-                response.putBoolean("success", false);
-                response.putString("message", "Face detector test failed");
-                promise.resolve(response);
-            }
-        } catch (Exception e) {
-            promise.reject("TEST_ERROR", "Failed to test face detector: " + e.getMessage(), e);
         }
     }
     

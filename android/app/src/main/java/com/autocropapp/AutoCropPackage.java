@@ -1,7 +1,5 @@
 package com.autocropapp;
 
-import android.util.Log;
-
 import androidx.annotation.NonNull;
 
 import com.facebook.react.ReactPackage;
@@ -14,25 +12,17 @@ import java.util.Collections;
 import java.util.List;
 
 public class AutoCropPackage implements ReactPackage {
-    private static final String TAG = "AutoCropPackage";
-
     @NonNull
     @Override
     public List<NativeModule> createNativeModules(@NonNull ReactApplicationContext reactContext) {
-        Log.d(TAG, "Creating native modules, reactContext is " + (reactContext != null ? "valid" : "null"));
         List<NativeModule> modules = new ArrayList<>();
-        try {
-            AutoCropModule module = new AutoCropModule(reactContext);
-            Log.d(TAG, "Created AutoCropModule with name: " + module.getName());
-            modules.add(module);
-        } catch (Exception e) {
-            Log.e(TAG, "Error creating AutoCropModule", e);
-        }
+        modules.add(new AutoCropModule(reactContext));
         return modules;
     }
 
     @NonNull
     @Override
+    @SuppressWarnings("rawtypes")
     public List<ViewManager> createViewManagers(@NonNull ReactApplicationContext reactContext) {
         return Collections.emptyList();
     }
