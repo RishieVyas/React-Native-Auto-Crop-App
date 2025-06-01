@@ -4,13 +4,13 @@ import {
   StatusBar,
   StyleSheet,
 } from 'react-native';
-import Home from './Home';
+import HomeScreen from './src/screens/HomeScreen';
 
 const App = () => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
-      <Home />
+      <HomeScreen />
     </SafeAreaView>
   );
 };
