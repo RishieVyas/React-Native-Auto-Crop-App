@@ -1,17 +1,17 @@
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  Modal, 
-  TouchableOpacity, 
-  FlatList, 
-  Image, 
-  StyleSheet 
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  FlatList,
+  Image,
+  StyleSheet
 } from 'react-native';
 
 const HistoryItem = ({ item, onPress }) => (
-  <TouchableOpacity 
-    style={styles.historyItem} 
+  <TouchableOpacity
+    style={styles.historyItem}
     onPress={() => onPress(item)}
   >
     <Image source={{ uri: item.uri }} style={styles.historyItemImage} />
@@ -21,11 +21,11 @@ const HistoryItem = ({ item, onPress }) => (
   </TouchableOpacity>
 );
 
-const HistoryModal = ({ 
-  visible, 
-  onClose, 
-  historyItems = [], 
-  onHistoryItemPress 
+const HistoryModal = ({
+  visible,
+  onClose,
+  historyItems = [],
+  onHistoryItemPress
 }) => {
   return (
     <Modal
@@ -37,7 +37,7 @@ const HistoryModal = ({
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Saved Images</Text>
-          
+
           {historyItems.length === 0 ? (
             <Text style={styles.noHistoryText}>No saved images found</Text>
           ) : (
@@ -50,8 +50,8 @@ const HistoryModal = ({
               style={styles.historyList}
             />
           )}
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.modalCloseButton}
             onPress={onClose}
           >

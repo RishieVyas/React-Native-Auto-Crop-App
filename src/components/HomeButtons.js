@@ -7,11 +7,11 @@ const HomeButtons = ({ onCameraPress, onGalleryPress, onHistoryPress }) => {
       <TouchableOpacity style={styles.button} onPress={onCameraPress}>
         <Text style={styles.buttonText}>Camera</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity style={styles.button} onPress={onGalleryPress}>
         <Text style={styles.buttonText}>Gallery</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity style={styles.button} onPress={onHistoryPress}>
         <Text style={styles.buttonText}>Saved Images</Text>
       </TouchableOpacity>

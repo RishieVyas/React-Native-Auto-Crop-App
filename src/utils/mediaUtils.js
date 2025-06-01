@@ -17,21 +17,19 @@ export const captureImage = async () => {
     saveToPhotos: false,
   };
 
-  // Show user feedback
   if (Platform.OS === 'android') {
     ToastAndroid.show('Opening camera...', ToastAndroid.SHORT);
   }
-  
+
   try {
-    // Use a promise wrapper for the callback-based API
     const response = await new Promise((resolve) => {
       launchCamera(options, (result) => resolve(result));
     });
-    
+
     if (response.didCancel) {
       return null;
     }
-    
+
     if (response.errorCode) {
       if (Platform.OS === 'android') {
         ToastAndroid.show(`Camera error: ${response.errorMessage}`, ToastAndroid.SHORT);
@@ -40,7 +38,7 @@ export const captureImage = async () => {
       }
       return null;
     }
-    
+
     if (!response.assets || !response.assets[0] || !response.assets[0].uri) {
       if (Platform.OS === 'android') {
         ToastAndroid.show('Failed to capture image', ToastAndroid.SHORT);
@@ -49,8 +47,7 @@ export const captureImage = async () => {
       }
       return null;
     }
-    
-    // Return the image URI
+
     return { uri: response.assets[0].uri };
   } catch (error) {
     if (Platform.OS === 'android') {
@@ -75,21 +72,19 @@ export const selectImageFromGallery = async () => {
     quality: 1,
   };
 
-  // Show user feedback
   if (Platform.OS === 'android') {
     ToastAndroid.show('Opening gallery...', ToastAndroid.SHORT);
   }
-  
+
   try {
-    // Use a promise wrapper for the callback-based API
     const response = await new Promise((resolve) => {
       launchImageLibrary(options, (result) => resolve(result));
     });
-    
+
     if (response.didCancel) {
       return null;
     }
-    
+
     if (response.errorCode) {
       if (Platform.OS === 'android') {
         ToastAndroid.show(`Gallery error: ${response.errorMessage}`, ToastAndroid.SHORT);
@@ -98,7 +93,7 @@ export const selectImageFromGallery = async () => {
       }
       return null;
     }
-    
+
     if (!response.assets || !response.assets[0] || !response.assets[0].uri) {
       if (Platform.OS === 'android') {
         ToastAndroid.show('Failed to select image', ToastAndroid.SHORT);
@@ -107,8 +102,7 @@ export const selectImageFromGallery = async () => {
       }
       return null;
     }
-    
-    // Return the image URI
+
     return { uri: response.assets[0].uri };
   } catch (error) {
     if (Platform.OS === 'android') {
@@ -125,24 +119,21 @@ export const selectImageFromGallery = async () => {
  * @param {string} imagePath - The image path to save
  * @returns {Promise<boolean>} Success status
  */
+
 export const saveToGallery = async (imagePath) => {
   try {
-    // Extract the actual path from the URI (remove file:// prefix)
-    const path = imagePath.startsWith('file://') 
-      ? imagePath.substring(7) 
+    const path = imagePath.startsWith('file://')
+      ? imagePath.substring(7)
       : imagePath;
-    
-    // Get the pictures directory path
+
     const externalDir = RNFS.PicturesDirectoryPath;
     const timestamp = Date.now();
     const externalDestPath = `${externalDir}/AutoCrop_${timestamp}.jpg`;
-    
-    // Copy the file to external storage
+
     await RNFS.copyFile(path, externalDestPath);
-    
-    // Make it visible in the gallery
+
     await AutoCropModule.scanFile(externalDestPath);
-    
+
     return true;
   } catch (error) {
     return false;

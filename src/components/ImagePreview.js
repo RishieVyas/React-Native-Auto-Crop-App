@@ -1,20 +1,20 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 
-const ImagePreview = ({ 
-  uri, 
-  title, 
-  onClose, 
-  showSaveButton = false, 
-  onSave = null, 
-  isSaving = false 
+const ImagePreview = ({
+  uri,
+  title,
+  onClose,
+  showSaveButton = false,
+  onSave = null,
+  isSaving = false
 }) => {
   return (
     <View style={styles.imageCard}>
       <View style={styles.imageCardHeader}>
         {showSaveButton && (
-          <TouchableOpacity 
-            style={[styles.saveButton, isSaving && styles.disabledButton]} 
+          <TouchableOpacity
+            style={[styles.saveButton, isSaving && styles.disabledButton]}
             onPress={onSave}
             disabled={isSaving}
           >
@@ -27,16 +27,16 @@ const ImagePreview = ({
         )}
 
         <Text style={styles.imageCardTitle}>{title}</Text>
-        
-        <TouchableOpacity 
-          style={styles.closeButton} 
+
+        <TouchableOpacity
+          style={styles.closeButton}
           onPress={onClose}
         >
           <Text style={styles.closeButtonX}>✕</Text>
         </TouchableOpacity>
       </View>
-      <Image 
-        source={{ uri }} 
+      <Image
+        source={{ uri }}
         style={styles.cardImage}
         resizeMode="contain"
       />

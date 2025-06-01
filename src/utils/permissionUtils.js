@@ -6,7 +6,7 @@ import { Platform, PermissionsAndroid } from 'react-native';
  */
 export const requestCameraPermission = async () => {
   if (Platform.OS !== 'android') return true;
-  
+
   try {
     const granted = await PermissionsAndroid.request(
       PermissionsAndroid.PERMISSIONS.CAMERA,
@@ -18,7 +18,7 @@ export const requestCameraPermission = async () => {
         buttonPositive: 'OK',
       },
     );
-    
+
     return granted === PermissionsAndroid.RESULTS.GRANTED;
   } catch (err) {
     return false;
@@ -31,13 +31,13 @@ export const requestCameraPermission = async () => {
  */
 export const requestStorageReadPermission = async () => {
   if (Platform.OS !== 'android') return true;
-  
+
   try {
     // For Android 13+ use READ_MEDIA_IMAGES, for older versions use READ_EXTERNAL_STORAGE
     const permission = parseInt(Platform.Version, 10) >= 33
       ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
       : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
-      
+
     const granted = await PermissionsAndroid.request(
       permission,
       {
@@ -48,7 +48,7 @@ export const requestStorageReadPermission = async () => {
         buttonPositive: 'OK',
       },
     );
-    
+
     return granted === PermissionsAndroid.RESULTS.GRANTED;
   } catch (err) {
     return false;
@@ -61,13 +61,13 @@ export const requestStorageReadPermission = async () => {
  */
 export const requestStorageWritePermission = async () => {
   if (Platform.OS !== 'android') return true;
-  
+
   try {
     // For Android 13+ use READ_MEDIA_IMAGES (since write is included), for older versions use WRITE_EXTERNAL_STORAGE
     const permission = parseInt(Platform.Version, 10) >= 33
       ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
       : PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE;
-      
+
     const granted = await PermissionsAndroid.request(
       permission,
       {
@@ -78,7 +78,7 @@ export const requestStorageWritePermission = async () => {
         buttonPositive: 'OK',
       },
     );
-    
+
     return granted === PermissionsAndroid.RESULTS.GRANTED;
   } catch (err) {
     return false;
