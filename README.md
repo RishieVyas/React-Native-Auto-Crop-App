@@ -232,20 +232,6 @@ Displays the history of saved images:
    - No data is transmitted over the network
    - Original and processed images are kept in private app storage
 
-## Bonus Features
-
-### Image History
-
-- The app maintains a history of processed images
-- Images are stored in app-specific storage
-- Users can view and reselect previously processed images
-
-### Gallery Access and Saving
-
-- Users can select images from the device gallery
-- Processed images can be saved to the device gallery
-- Media scanning ensures saved images appear in the gallery immediately
-
 ### UI/UX Decisions
 
 1. **Simple Navigation**: Three main buttons provide clear entry points to functionality
